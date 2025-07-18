@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vyom Voyage CubeSat Ground Station</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #2d2d5f 100%);
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            background: rgba(15, 15, 35, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid #00ff88;
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            text-align: center;
+            background: linear-gradient(45deg, #00ff88, #00bfff, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+            animation: glow 3s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            0% { filter: brightness(1); }
+            100% { filter: brightness(1.2); }
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .status-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            margin: 0.25rem;
+            transition: all 0.3s ease;
+        }
+        
+        .status-item:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .status-item.active {
+            background: rgba(0, 255, 136, 0.3);
+            border-color: #00ff88;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: auto auto auto;
+            gap: 1.5rem;
+            padding: 2rem;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 15px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .panel:hover::before {
+            left: 100%;
+        }
+        
+        .panel:hover {
+            border-color: #00ff88;
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.2);
+            transform: translateY(-5px);
+        }
+        
+        .panel h3 {
+            color: #00ff88;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+            text-align: center;
+            position: relative;
+        }
+        
+        .orientation-panel {
+            grid-column: 1;
+            grid-row: 1 / 3;
+            height: 600px;
+        }
+        
+        .environmental-panel {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        
+        .gps-panel {
+            grid-column: 3;
+            grid-row: 1;
+        }
+        
+        .altitude-panel {
+            grid-column: 2 / 4;
+            grid-row: 2;
+            height: 400px;
+        }
+        
+        .telemetry-panel {
+            grid-column: 1 / 4;
+            grid-row: 3;
+        }
+        
+        #orientation-container {
+            width: 100%;
+            height: 450px;
+            border: 2px solid rgba(0, 255, 136, 0.3);
+            border-radius: 10px;
+            position: relative;
+        }
+        
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .data-item {
+            background: rgba(0, 255, 136, 0.1);
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #00ff88;
+            transition: all 0.3s ease;
+        }
+        
+        .data-item:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: translateX(5px);
+        }
+        
+        .data-label {
+            font-size: 0.9rem;
+            color: #cccccc;
+            margin-bottom: 0.5rem;
+        }
+        
+        .data-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            position: relative;
+        }
+        
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .connection-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff6b6b;
+            animation: pulse 2s infinite;
+        }
+        
+        .connection-status.connected {
+            background: #00ff88;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .orientation-data {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            z-index: 10;
+        }
+        
+        @media (max-width: 1200px) {
+            .dashboard {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .orientation-panel {
+                grid-column: 1;
+                grid-row: 1;
+            }
+            
+            .environmental-panel {
+                grid-column: 2;
+                grid-row: 1;
+            }
+            
+            .gps-panel {
+                grid-column: 1;
+                grid-row: 2;
+            }
+            
+            .altitude-panel {
+                grid-column: 2;
+                grid-row: 2;
+            }
+            
+            .telemetry-panel {
+                grid-column: 1 / 3;
+                grid-row: 3;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .orientation-panel,
+            .environmental-panel,
+            .gps-panel,
+            .altitude-panel,
+            .telemetry-panel {
+                grid-column: 1;
+                grid-row: auto;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛰️ VYOM VOYAGE CUBESAT GROUND STATION 🛰️</h1>
+        <div class="status-bar">
+            <div class="status-item" id="imu-status">IMU: OFFLINE</div>
+            <div class="status-item" id="env-status">ENV: OFFLINE</div>
+            <div class="status-item" id="gps-status">GPS: OFFLINE</div>
+            <div class="status-item" id="signal-strength">SIGNAL: WEAK</div>
+            <div class="status-item" id="data-rate">DATA: 0 Hz</div>
+            <button class="status-item" id="connect-btn" onclick="connectSerial()" style="cursor: pointer; background: rgba(0, 255, 136, 0.3); border: 1px solid #00ff88;">🔌 CONNECT SERIAL</button>
+        </div>
+    </div>
+    
+    <div class="dashboard">
+        <div class="panel orientation-panel">
+            <h3>🎯 3D ORIENTATION & IMU DATA</h3>
+            <div class="connection-status" id="connection-status"></div>
+            <div id="orientation-container"></div>
+            <div class="orientation-data" id="orientation-data">
+                <div>Roll: <span id="roll-val">0.00°</span></div>
+                <div>Pitch: <span id="pitch-val">0.00°</span></div>
+                <div>Yaw: <span id="yaw-val">0.00°</span></div>
+                <div>Q: <span id="quat-val">0,0,0,0</span></div>
+            </div>
+        </div>
+        
+        <div class="panel environmental-panel">
+            <h3>🌡️ ENVIRONMENTAL SENSORS</h3>
+            <div class="data-grid">
+                <div class="data-item">
+                    <div class="data-label">Temperature (AHT)</div>
+                    <div class="data-value" id="temp-aht">--°C</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Humidity</div>
+                    <div class="data-value" id="humidity">--%</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Temperature (BMP)</div>
+                    <div class="data-value" id="temp-bmp">--°C</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Pressure</div>
+                    <div class="data-value" id="pressure">-- hPa</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel gps-panel">
+            <h3>📡 GPS & NAVIGATION</h3>
+            <div class="data-grid">
+                <div class="data-item">
+                    <div class="data-label">Latitude</div>
+                    <div class="data-value" id="latitude">--°</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Longitude</div>
+                    <div class="data-value" id="longitude">--°</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">GPS Altitude</div>
+                    <div class="data-value" id="gps-altitude">-- m</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Speed</div>
+                    <div class="data-value" id="speed">-- m/s</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Satellites</div>
+                    <div class="data-value" id="satellites">--</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">GPS Status</div>
+                    <div class="data-value" id="gps-valid">INVALID</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel altitude-panel">
+            <h3>📈 ALTITUDE TRACKING</h3>
+            <div class="chart-container">
+                <canvas id="altitudeChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="panel telemetry-panel">
+            <h3>📊 COMPLETE TELEMETRY</h3>
+            <div class="telemetry-grid">
+                <div class="data-item">
+                    <div class="data-label">Accelerometer X</div>
+                    <div class="data-value" id="accel-x">-- m/s²</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Accelerometer Y</div>
+                    <div class="data-value" id="accel-y">-- m/s²</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Accelerometer Z</div>
+                    <div class="data-value" id="accel-z">-- m/s²</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Gyroscope X</div>
+                    <div class="data-value" id="gyro-x">-- °/s</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Gyroscope Y</div>
+                    <div class="data-value" id="gyro-y">-- °/s</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Gyroscope Z</div>
+                    <div class="data-value" id="gyro-z">-- °/s</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Magnetometer X</div>
+                    <div class="data-value" id="mag-x">-- μT</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Magnetometer Y</div>
+                    <div class="data-value" id="mag-y">-- μT</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Magnetometer Z</div>
+                    <div class="data-value" id="mag-z">-- μT</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">BMP Altitude</div>
+                    <div class="data-value" id="bmp-altitude">-- m</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Last Update</div>
+                    <div class="data-value" id="timestamp">--</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">System Status</div>
+                    <div class="data-value" id="system-status">WAITING</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Three.js setup for 3D orientation visualization
+        let scene, camera, renderer, cubesat;
+        let altitudeChart;
+        let altitudeData = [];
+        let lastUpdateTime = 0;
+        let updateRate = 0;
+        let updateCount = 0;
+        
+        // Current data storage
+        let currentData = {
+            roll: 0, pitch: 0, yaw: 0,
+            q0: 1, q1: 0, q2: 0, q3: 0,
+            accelX: 0, accelY: 0, accelZ: 0,
+            gyroX: 0, gyroY: 0, gyroZ: 0,
+            magX: 0, magY: 0, magZ: 0,
+            temperature_aht: 0, humidity: 0,
+            temperature_bmp: 0, pressure: 0,
+            altitude_bmp: 0, latitude: 0,
+            longitude: 0, altitude_gps: 0,
+            speed: 0, satellites: 0,
+            gps_valid: false, timestamp: 0,
+            imu_valid: false, environmental_valid: false,
+            gps_data_valid: false
+        };
+        
+        function initThreeJS() {
+            const container = document.getElementById('orientation-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a1a);
+            
+            camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 0, 5);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+            
+            // Create CubeSat representation
+            const geometry = new THREE.BoxGeometry(1, 1, 0.1);
+            const materials = [
+                new THREE.MeshPhongMaterial({ color: 0x00ff88 }), // right
+                new THREE.MeshPhongMaterial({ color: 0x0088ff }), // left
+                new THREE.MeshPhongMaterial({ color: 0xff6b6b }), // top
+                new THREE.MeshPhongMaterial({ color: 0xffff00 }), // bottom
+                new THREE.MeshPhongMaterial({ color: 0xff8800 }), // front
+                new THREE.MeshPhongMaterial({ color: 0x8800ff })  // back
+            ];
+            
+            cubesat = new THREE.Mesh(geometry, materials);
+            cubesat.castShadow = true;
+            scene.add(cubesat);
+            
+            // Add solar panels
+            const panelGeometry = new THREE.BoxGeometry(2, 0.5, 0.02);
+            const panelMaterial = new THREE.MeshPhongMaterial({ color: 0x0066cc });
+            
+            const leftPanel = new THREE.Mesh(panelGeometry, panelMaterial);
+            leftPanel.position.set(-1.5, 0, 0);
+            cubesat.add(leftPanel);
+            
+            const rightPanel = new THREE.Mesh(panelGeometry, panelMaterial);
+            rightPanel.position.set(1.5, 0, 0);
+            cubesat.add(rightPanel);
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 5, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            // Add axes helper
+            const axesHelper = new THREE.AxesHelper(2);
+            scene.add(axesHelper);
+            
+            // Add stars
+            const starGeometry = new THREE.BufferGeometry();
+            const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1 });
+            
+            const starVertices = [];
+            for (let i = 0; i < 1000; i++) {
+                starVertices.push(
+                    (Math.random() - 0.5) * 100,
+                    (Math.random() - 0.5) * 100,
+                    (Math.random() - 0.5) * 100
+                );
+            }
+            
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+            
+            animate();
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        
+        function initAltitudeChart() {
+            const ctx = document.getElementById('altitudeChart').getContext('2d');
+            altitudeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'BMP Altitude (m)',
+                        data: [],
+                        borderColor: '#00ff88',
+                        backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }, {
+                        label: 'GPS Altitude (m)',
+                        data: [],
+                        borderColor: '#00bfff',
+                        backgroundColor: 'rgba(0, 191, 255, 0.1)',
+                        fill: false,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#ffffff'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#ffffff'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#ffffff'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateOrientation(roll, pitch, yaw) {
+            if (cubesat) {
+                cubesat.rotation.x = pitch * Math.PI / 180;
+                cubesat.rotation.y = yaw * Math.PI / 180;
+                cubesat.rotation.z = roll * Math.PI / 180;
+            }
+        }
+        
+        function updateData(data) {
+            // Update 3D orientation
+            updateOrientation(data.roll, data.pitch, data.yaw);
+            
+            // Update orientation display
+            document.getElementById('roll-val').textContent = data.roll.toFixed(2) + '°';
+            document.getElementById('pitch-val').textContent = data.pitch.toFixed(2) + '°';
+            document.getElementById('yaw-val').textContent = data.yaw.toFixed(2) + '°';
+            document.getElementById('quat-val').textContent = 
+                `${data.q0.toFixed(3)}, ${data.q1.toFixed(3)}, ${data.q2.toFixed(3)}, ${data.q3.toFixed(3)}`;
+            
+            // Update environmental data
+            document.getElementById('temp-aht').textContent = data.temperature_aht.toFixed(1) + '°C';
+            document.getElementById('humidity').textContent = data.humidity.toFixed(1) + '%';
+            document.getElementById('temp-bmp').textContent = data.temperature_bmp.toFixed(1) + '°C';
+            document.getElementById('pressure').textContent = data.pressure.toFixed(1) + ' hPa';
+            
+            // Update GPS data
+            document.getElementById('latitude').textContent = data.latitude.toFixed(6) + '°';
+            document.getElementById('longitude').textContent = data.longitude.toFixed(6) + '°';
+            document.getElementById('gps-altitude').textContent = data.altitude_gps.toFixed(1) + ' m';
+            document.getElementById('speed').textContent = data.speed.toFixed(1) + ' m/s';
+            document.getElementById('satellites').textContent = data.satellites;
+            document.getElementById('gps-valid').textContent = data.gps_valid ? 'VALID' : 'INVALID';
+            
+            // Update telemetry
+            document.getElementById('accel-x').textContent = data.accelX.toFixed(2) + ' m/s²';
+            document.getElementById('accel-y').textContent = data.accelY.toFixed(2) + ' m/s²';
+            document.getElementById('accel-z').textContent = data.accelZ.toFixed(2) + ' m/s²';
+            document.getElementById('gyro-x').textContent = data.gyroX.toFixed(2) + ' °/s';
+            document.getElementById('gyro-y').textContent = data.gyroY.toFixed(2) + ' °/s';
+            document.getElementById('gyro-z').textContent = data.gyroZ.toFixed(2) + ' °/s';
+            document.getElementById('mag-x').textContent = data.magX.toFixed(2) + ' μT';
+            document.getElementById('mag-y').textContent = data.magY.toFixed(2) + ' μT';
+            document.getElementById('mag-z').textContent = data.magZ.toFixed(2) + ' μT';
+            document.getElementById('bmp-altitude').textContent = data.altitude_bmp.toFixed(1) + ' m';
+            document.getElementById('timestamp').textContent = new Date(data.timestamp).toLocaleTimeString();
+            
+            // Update status indicators
+            document.getElementById('imu-status').textContent = data.imu_valid ? 'IMU: ONLINE' : 'IMU: OFFLINE';
+            document.getElementById('imu-status').className = data.imu_valid ? 'status-item active' : 'status-item';
+            
+            document.getElementById('env-status').textContent = data.environmental_valid ? 'ENV: ONLINE' : 'ENV: OFFLINE';
+            document.getElementById('env-status').className = data.environmental_valid ? 'status-item active' : 'status-item';
+            
+            document.getElementById('gps-status').textContent = data.gps_data_valid ? 'GPS: ONLINE' : 'GPS: OFFLINE';
+            document.getElementById('gps-status').className = data.gps_data_valid ? 'status-item active' : 'status-item';
+            
+            // Update altitude chart
+            const now = new Date();
+            const timeLabel = now.toLocaleTimeString();
+            
+            altitudeChart.data.labels.push(timeLabel);
+            altitudeChart.data.datasets[0].data.push(data.altitude_bmp);
+            altitudeChart.data.datasets[1].data.push(data.altitude_gps);
+            
+            // Keep only last 20 data points
+            if (altitudeChart.data.labels.length > 20) {
+                altitudeChart.data.labels.shift();
+                altitudeChart.data.datasets[0].data.shift();
+                altitudeChart.data.datasets[1].data.shift();
+            }
+            
+            altitudeChart.update('none');
+            
+            // Update connection status
+            document.getElementById('connection-status').className = 'connection-status connected';
+            document.getElementById('system-status').textContent = 'RECEIVING DATA';
+            
+            // Calculate data rate
+            updateCount++;
+            const currentTime = Date.now();
+            if (currentTime - lastUpdateTime >= 1000) {
+                updateRate = updateCount;
+                updateCount = 0;
+                lastUpdateTime = currentTime;
+                document.getElementById('data-rate').textContent = `DATA: ${updateRate} Hz`;
+            }
+        }
+        
+        // Serial communication variables
+        let port, reader;
+        let isConnected = false;
+        let serialBuffer = '';
+        
+        // Serial communication functions
+        async function connectSerial() {
+            try {
+                if ('serial' in navigator) {
+                    port = await navigator.serial.requestPort();
+                    await port.open({ baudRate: 115200 });
+                    
+                    reader = port.readable.getReader();
+                    isConnected = true;
+                    
+                    document.getElementById('connection-status').className = 'connection-status connected';
+                    document.getElementById('system-status').textContent = 'CONNECTED';
+                    
+                    readSerialData();
+                } else {
+                    alert('Web Serial API not supported. Please use Chrome/Edge browser.');
+                }
+            } catch (error) {
+                console.error('Serial connection error:', error);
+                alert('Failed to connect to serial port: ' + error.message);
+            }
+        }
+        
+        async function disconnectSerial() {
+            if (reader) {
+                await reader.cancel();
+                reader = null;
+            }
+            if (port) {
+                await port.close();
+                port = null;
+            }
+            
+            isConnected = false;
+            document.getElementById('connection-status').className = 'connection-status';
+            document.getElementById('system-status').textContent = 'DISCONNECTED';
+        }
+        
+        async function readSerialData() {
+            try {
+                while (isConnected) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const text = new TextDecoder().decode(value);
+                    serialBuffer += text;
+                    
+                    let lines = serialBuffer.split('\n');
+                    serialBuffer = lines.pop(); // Keep incomplete line in buffer
+                    
+                    for (let line of lines) {
+                        processSerialLine(line.trim());
+                    }
+                }
+            } catch (error) {
+                console.error('Serial read error:', error);
+                disconnectSerial();
+            }
+        }
+        
+        function processSerialLine(line) {
+            console.log('Received:', line); // Debug log
+            
+            if (line.startsWith('=== Struct Received ===')) {
+                // Start of new data packet
+                return;
+            }
+            
+            // Parse individual data lines from your ESP8266 output
+            if (line.startsWith('Roll: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.roll = value;
+            }
+            else if (line.startsWith('Pitch: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.pitch = value;
+            }
+            else if (line.startsWith('Yaw: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.yaw = value;
+            }
+            else if (line.startsWith('Q0: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.q0 = value;
+            }
+            else if (line.startsWith('Q1: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.q1 = value;
+            }
+            else if (line.startsWith('Q2: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.q2 = value;
+            }
+            else if (line.startsWith('Q3: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.q3 = value;
+            }
+            else if (line.startsWith('Temp AHT: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.temperature_aht = value;
+            }
+            else if (line.startsWith('Humidity: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.humidity = value;
+            }
+            else if (line.startsWith('Temp BMP: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.temperature_bmp = value;
+            }
+            else if (line.startsWith('Pressure: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.pressure = value;
+            }
+            else if (line.startsWith('Altitude BMP: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.altitude_bmp = value;
+            }
+            else if (line.startsWith('Latitude: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.latitude = value;
+            }
+            else if (line.startsWith('Longitude: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.longitude = value;
+            }
+            else if (line.startsWith('GPS Alt: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.altitude_gps = value;
+            }
+            else if (line.startsWith('Speed: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.speed = value;
+            }
+            else if (line.startsWith('Satellites: ')) {
+                const value = parseInt(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.satellites = value;
+            }
+            else if (line.startsWith('AccelX: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.accelX = value;
+            }
+            else if (line.startsWith('AccelY: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.accelY = value;
+            }
+            else if (line.startsWith('AccelZ: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.accelZ = value;
+            }
+            else if (line.startsWith('GyroX: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.gyroX = value;
+            }
+            else if (line.startsWith('GyroY: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.gyroY = value;
+            }
+            else if (line.startsWith('GyroZ: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.gyroZ = value;
+            }
+            else if (line.startsWith('MagX: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.magX = value;
+            }
+            else if (line.startsWith('MagY: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.magY = value;
+            }
+            else if (line.startsWith('MagZ: ')) {
+                const value = parseFloat(line.split(': ')[1]);
+                if (!isNaN(value)) currentData.magZ = value;
+            }
+            
+            // Update timestamp and trigger UI update
+            currentData.timestamp = Date.now();
+            updateData(currentData);
+        }
+        
+        // Initialize everything
+        window.addEventListener('load', function() {
+            initThreeJS();
+            initAltitudeChart();
+            
+            // Check for Web Serial API support
+            if ('serial' in navigator) {
+                console.log('Web Serial API supported');
+                document.getElementById('system-status').textContent = 'READY - Click Connect Serial';
+            } else {
+                console.log('Web Serial API not supported');
+                document.getElementById('system-status').textContent = 'WEB SERIAL NOT SUPPORTED';
+                alert('Web Serial API not supported. Please use Chrome/Edge browser and enable experimental features.');
+            }
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                const container = document.getElementById('orientation-container');
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+        });
+    </script>
+</body>
+</html>

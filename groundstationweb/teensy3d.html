@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICM-20948 3D Orientation Visualizer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Arial', sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            box-sizing: border-box;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .main-view {
+            flex: 1;
+            position: relative;
+        }
+        
+        h1 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            text-align: center;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .data-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .data-section h3 {
+            margin: 0 0 10px 0;
+            color: #4CAF50;
+            font-size: 16px;
+        }
+        
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .data-label {
+            font-weight: bold;
+            color: #E0E0E0;
+        }
+        
+        .data-value {
+            color: #4CAF50;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .controls {
+            text-align: center;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status.connected {
+            background: rgba(76, 175, 80, 0.3);
+            border: 1px solid #4CAF50;
+        }
+        
+        .status.disconnected {
+            background: rgba(244, 67, 54, 0.3);
+            border: 1px solid #f44336;
+        }
+        
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .instructions {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 300px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .instructions h4 {
+            margin: 0 0 10px 0;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>IMU Control</h1>
+            
+            <div class="controls">
+                <button id="connectBtn">Connect Serial</button>
+                <button id="resetBtn">Reset Orientation</button>
+            </div>
+            
+            <div id="status" class="status disconnected">Disconnected</div>
+            
+            <div class="data-section">
+                <h3>Euler Angles (°)</h3>
+                <div class="data-row">
+                    <span class="data-label">Roll:</span>
+                    <span class="data-value" id="roll">0.00</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Pitch:</span>
+                    <span class="data-value" id="pitch">0.00</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Yaw:</span>
+                    <span class="data-value" id="yaw">0.00</span>
+                </div>
+            </div>
+            
+            <div class="data-section">
+                <h3>Quaternions</h3>
+                <div class="data-row">
+                    <span class="data-label">W:</span>
+                    <span class="data-value" id="q0">1.0000</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">X:</span>
+                    <span class="data-value" id="q1">0.0000</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Y:</span>
+                    <span class="data-value" id="q2">0.0000</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Z:</span>
+                    <span class="data-value" id="q3">0.0000</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-view">
+            <div class="instructions">
+                <!-- <h4>Instructions:</h4>
+                <p>1. Upload the Arduino code to your Teensy 4.1</p>
+                <p>2. Connect the ICM-20948 via I2C</p>
+                <p>3. Click "Connect Serial" to start visualization</p>
+                <p>4. Move your sensor to see real-time 3D orientation</p> -->
+            </div>
+            <canvas id="canvas"></canvas>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Three.js setup
+        let scene, camera, renderer, cube, axes;
+        let port, reader;
+        let isConnected = false;
+        
+        // Orientation data
+        let roll = 0, pitch = 0, yaw = 0;
+        let q0 = 1, q1 = 0, q2 = 0, q3 = 0;
+        
+        // Initialize 3D scene
+        function init3D() {
+            const canvas = document.getElementById('canvas');
+            
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+            camera.position.set(3, 3, 3);
+            camera.lookAt(0, 0, 0);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            // Create IMU representation (colorful cube)
+            const geometry = new THREE.BoxGeometry(2, 0.5, 1.5);
+            const materials = [
+                new THREE.MeshPhongMaterial({ color: 0xff4444 }), // Right - Red
+                new THREE.MeshPhongMaterial({ color: 0x44ff44 }), // Left - Green  
+                new THREE.MeshPhongMaterial({ color: 0x4444ff }), // Top - Blue
+                new THREE.MeshPhongMaterial({ color: 0xffff44 }), // Bottom - Yellow
+                new THREE.MeshPhongMaterial({ color: 0xff44ff }), // Front - Magenta
+                new THREE.MeshPhongMaterial({ color: 0x44ffff })  // Back - Cyan
+            ];
+            
+            cube = new THREE.Mesh(geometry, materials);
+            cube.castShadow = true;
+            scene.add(cube);
+            
+            // Add coordinate axes
+            axes = new THREE.Group();
+            
+            // X-axis (Red)
+            const xGeometry = new THREE.CylinderGeometry(0.02, 0.02, 2);
+            const xMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+            const xAxis = new THREE.Mesh(xGeometry, xMaterial);
+            xAxis.rotation.z = -Math.PI / 2;
+            xAxis.position.x = 1;
+            axes.add(xAxis);
+            
+            // Y-axis (Green)
+            const yGeometry = new THREE.CylinderGeometry(0.02, 0.02, 2);
+            const yMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            const yAxis = new THREE.Mesh(yGeometry, yMaterial);
+            yAxis.position.y = 1;
+            axes.add(yAxis);
+            
+            // Z-axis (Blue)
+            const zGeometry = new THREE.CylinderGeometry(0.02, 0.02, 2);
+            const zMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff });
+            const zAxis = new THREE.Mesh(zGeometry, zMaterial);
+            zAxis.rotation.x = Math.PI / 2;
+            zAxis.position.z = 1;
+            axes.add(zAxis);
+            
+            scene.add(axes);
+            
+            // Add grid
+            const gridHelper = new THREE.GridHelper(10, 10, 0x888888, 0x444444);
+            gridHelper.position.y = -2;
+            scene.add(gridHelper);
+            
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+            
+            // Start render loop
+            animate();
+        }
+        
+        function onWindowResize() {
+            const canvas = document.getElementById('canvas');
+            camera.aspect = canvas.clientWidth / canvas.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Apply quaternion rotation to cube
+            if (cube) {
+                const quaternion = new THREE.Quaternion(q1, q3, q2, q0);
+                cube.setRotationFromQuaternion(quaternion);
+            }
+            
+            // Rotate camera around the scene
+            const time = Date.now() * 0.0005;
+            camera.position.x = Math.cos(time) * 5;
+            camera.position.z = Math.sin(time) * 5;
+            camera.lookAt(0, 0, 0);
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Serial communication
+        async function connectSerial() {
+            try {
+                if ('serial' in navigator) {
+                    port = await navigator.serial.requestPort();
+                    await port.open({ baudRate: 115200 });
+                    
+                    reader = port.readable.getReader();
+                    isConnected = true;
+                    
+                    document.getElementById('status').textContent = 'Connected';
+                    document.getElementById('status').className = 'status connected';
+                    document.getElementById('connectBtn').textContent = 'Disconnect';
+                    
+                    readData();
+                } else {
+                    alert('Web Serial API not supported. Use Chrome/Edge browser.');
+                }
+            } catch (error) {
+                console.error('Serial connection error:', error);
+                alert('Failed to connect to serial port.');
+            }
+        }
+        
+        async function disconnectSerial() {
+            if (reader) {
+                await reader.cancel();
+                reader = null;
+            }
+            if (port) {
+                await port.close();
+                port = null;
+            }
+            
+            isConnected = false;
+            document.getElementById('status').textContent = 'Disconnected';
+            document.getElementById('status').className = 'status disconnected';
+            document.getElementById('connectBtn').textContent = 'Connect Serial';
+        }
+        
+        async function readData() {
+            let buffer = '';
+            
+            try {
+                while (isConnected) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const text = new TextDecoder().decode(value);
+                    buffer += text;
+                    
+                    let lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep incomplete line in buffer
+                    
+                    for (let line of lines) {
+                        processLine(line.trim());
+                    }
+                }
+            } catch (error) {
+                console.error('Read error:', error);
+                disconnectSerial();
+            }
+        }
+        
+        function processLine(line) {
+            if (line.startsWith('ORIENTATION,')) {
+                const parts = line.split(',');
+                if (parts.length === 8) {
+                    roll = parseFloat(parts[1]);
+                    pitch = parseFloat(parts[2]);
+                    yaw = parseFloat(parts[3]);
+                    q0 = parseFloat(parts[4]);
+                    q1 = parseFloat(parts[5]);
+                    q2 = parseFloat(parts[6]);
+                    q3 = parseFloat(parts[7]);
+                    
+                    updateUI();
+                }
+            }
+        }
+        
+        function updateUI() {
+            document.getElementById('roll').textContent = roll.toFixed(2);
+            document.getElementById('pitch').textContent = pitch.toFixed(2);
+            document.getElementById('yaw').textContent = yaw.toFixed(2);
+            document.getElementById('q0').textContent = q0.toFixed(4);
+            document.getElementById('q1').textContent = q1.toFixed(4);
+            document.getElementById('q2').textContent = q2.toFixed(4);
+            document.getElementById('q3').textContent = q3.toFixed(4);
+        }
+        
+        function resetOrientation() {
+            roll = pitch = yaw = 0;
+            q0 = 1;
+            q1 = q2 = q3 = 0;
+            updateUI();
+        }
+        
+        // Event listeners
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            if (isConnected) {
+                await disconnectSerial();
+            } else {
+                await connectSerial();
+            }
+        });
+        
+        document.getElementById('resetBtn').addEventListener('click', resetOrientation);
+        
+        // Initialize
+        init3D();
+    </script>
+</body>
+</html>
