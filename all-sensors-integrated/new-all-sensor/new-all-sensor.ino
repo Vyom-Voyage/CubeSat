@@ -18,6 +18,8 @@ Adafruit_AHTX0 aht;
 Adafruit_BMP280 bmp;
 
 #define LED_PIN 36
+#define ESP_RST_PIN 21 // Teensy pin connected to ESP8266's RST pin
+
 
 // Unified sensor data structure
 struct SensorData {
@@ -74,10 +76,20 @@ void setup() {
   Serial.begin(115200);
   Serial2.begin(9600);      // TX2 = Pin 8 to ESP8266 RX (D2)
   pinMode(LED_PIN, OUTPUT);
-  while (!Serial) delay(10);
+  pinMode(ESP_RST_PIN, OUTPUT); // Configure ESP_RST_PIN as an output
+
+  // while (!Serial) delay(10);
   
   Serial.println("=== Unified Multi-Sensor System ===");
   Serial.println("Initializing sensors...");
+    // --- ESP8266 Reset Sequence ---
+  Serial.println("Resetting ESP8266...");
+  digitalWrite(ESP_RST_PIN, LOW);  // Pull RST pin low to reset ESP
+  delay(100);                      // Hold low for a short period (e.g., 100ms)
+  digitalWrite(ESP_RST_PIN, HIGH); // Release RST pin (ESP starts booting)
+  delay(1000);                     // Give ESP time to boot up (adjust as needed)
+  Serial.println("ESP8266 reset complete.");
+  // --- End ESP8266 Reset Sequence ---
   
   // Initialize I2C
   Wire.begin();
